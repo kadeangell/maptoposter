@@ -8,12 +8,48 @@ from tqdm import tqdm
 import time
 import json
 import os
+import pickle
+import shutil
 from datetime import datetime
 import argparse
 
 THEMES_DIR = "themes"
 FONTS_DIR = "fonts"
 POSTERS_DIR = "posters"
+CACHE_DIR = ".osmcache"
+
+def init_cache():
+    """Initialize cache directory and configure OSMnx HTTP response caching."""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    ox.settings.use_cache = True
+    ox.settings.cache_folder = os.path.join(CACHE_DIR, "http")
+
+def _cache_path(label, point, dist):
+    """Build a cache file path from label, coordinates, and distance."""
+    lat, lon = point
+    return os.path.join(CACHE_DIR, f"{label}_{lat:.4f}_{lon:.4f}_{dist}.pkl")
+
+def load_cache(label, point, dist):
+    """Load cached data. Returns (data, hit) tuple."""
+    path = _cache_path(label, point, dist)
+    if os.path.exists(path):
+        with open(path, 'rb') as f:
+            return pickle.load(f), True
+    return None, False
+
+def save_cache(data, label, point, dist):
+    """Save data to cache."""
+    path = _cache_path(label, point, dist)
+    with open(path, 'wb') as f:
+        pickle.dump(data, f)
+
+def clear_cache():
+    """Remove all cached OSM data."""
+    if os.path.exists(CACHE_DIR):
+        shutil.rmtree(CACHE_DIR)
+        print(f"✓ Cache cleared ({CACHE_DIR}/)")
+    else:
+        print("No cache to clear.")
 
 def load_fonts():
     """
@@ -84,7 +120,11 @@ def load_theme(theme_name="feature_based"):
             "road_secondary": "#2A2A2A",
             "road_tertiary": "#3A3A3A",
             "road_residential": "#4A4A4A",
-            "road_default": "#3A3A3A"
+            "road_default": "#3A3A3A",
+            "transit": "#E02020",
+            "transit_rail": "#E02020",
+            "transit_subway": "#E02020",
+            "transit_tram": "#E04040"
         }
     
     with open(theme_file, 'r') as f:
@@ -193,6 +233,37 @@ def get_edge_widths_by_type(G):
     
     return edge_widths
 
+def plot_transit_lines(ax, transit):
+    """
+    Plot transit lines (rail, subway, tram, light rail) with theme colors.
+    Lines are drawn above roads for visual prominence.
+    """
+    if 'railway' not in transit.columns:
+        return
+
+    transit_types = [
+        ('rail',       'transit_rail',   2.0),
+        ('subway',     'transit_subway', 3.0),
+        ('light_rail', 'transit_tram',   2.5),
+        ('tram',       'transit_tram',   2.0),
+        ('monorail',   'transit_tram',   2.0),
+    ]
+
+    default_color = THEME.get('transit', '#FF4444')
+
+    for rtype, color_key, width in transit_types:
+        mask = transit['railway'] == rtype
+        subset = transit[mask]
+        if subset.empty:
+            continue
+        # Only plot line geometries (skip stations/points)
+        line_mask = subset.geometry.type.isin(['LineString', 'MultiLineString'])
+        lines = subset[line_mask]
+        if lines.empty:
+            continue
+        color = THEME.get(color_key, default_color)
+        lines.plot(ax=ax, color=color, linewidth=width, zorder=5, alpha=0.85)
+
 def get_coordinates(city, country):
     """
     Fetches coordinates for a given city and country using geopy.
@@ -213,39 +284,91 @@ def get_coordinates(city, country):
     else:
         raise ValueError(f"Could not find coordinates for {city}, {country}")
 
-def create_poster(city, country, point, dist, output_file):
+def create_poster(city, country, point, dist, output_file, use_cache=True):
     print(f"\nGenerating map for {city}, {country}...")
-    
+
+    if use_cache:
+        init_cache()
+
     # Progress bar for data fetching
-    with tqdm(total=3, desc="Fetching map data", unit="step", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}') as pbar:
-        # 1. Fetch Street Network
-        pbar.set_description("Downloading street network")
-        G = ox.graph_from_point(point, dist=dist, dist_type='bbox', network_type='all')
+    with tqdm(total=4, desc="Fetching map data", unit="step", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}') as pbar:
+        # 1. Street Network
+        if use_cache:
+            G, hit = load_cache('streets', point, dist)
+        else:
+            G, hit = None, False
+        if hit:
+            pbar.set_description("Loading streets (cached)")
+        else:
+            pbar.set_description("Downloading street network")
+            G = ox.graph_from_point(point, dist=dist, dist_type='bbox', network_type='all')
+            if use_cache:
+                save_cache(G, 'streets', point, dist)
+            time.sleep(0.5)
         pbar.update(1)
-        time.sleep(0.5)  # Rate limit between requests
-        
-        # 2. Fetch Water Features
-        pbar.set_description("Downloading water features")
-        try:
-            water = ox.features_from_point(point, tags={'natural': 'water', 'waterway': 'riverbank'}, dist=dist)
-        except:
-            water = None
+
+        # 2. Water Features
+        if use_cache:
+            water, hit = load_cache('water', point, dist)
+        else:
+            water, hit = None, False
+        if hit:
+            pbar.set_description("Loading water (cached)")
+        else:
+            pbar.set_description("Downloading water features")
+            try:
+                water = ox.features_from_point(point, tags={'natural': 'water', 'waterway': 'riverbank'}, dist=dist)
+            except:
+                water = None
+            if use_cache:
+                save_cache(water, 'water', point, dist)
+            time.sleep(0.3)
         pbar.update(1)
-        time.sleep(0.3)
-        
-        # 3. Fetch Parks
-        pbar.set_description("Downloading parks/green spaces")
-        try:
-            parks = ox.features_from_point(point, tags={'leisure': 'park', 'landuse': 'grass'}, dist=dist)
-        except:
-            parks = None
+
+        # 3. Parks
+        if use_cache:
+            parks, hit = load_cache('parks', point, dist)
+        else:
+            parks, hit = None, False
+        if hit:
+            pbar.set_description("Loading parks (cached)")
+        else:
+            pbar.set_description("Downloading parks/green spaces")
+            try:
+                parks = ox.features_from_point(point, tags={'leisure': 'park', 'landuse': 'grass'}, dist=dist)
+            except:
+                parks = None
+            if use_cache:
+                save_cache(parks, 'parks', point, dist)
+            time.sleep(0.3)
         pbar.update(1)
-    
-    print("✓ All data downloaded successfully!")
+
+        # 4. Transit Lines
+        if use_cache:
+            transit, hit = load_cache('transit', point, dist)
+        else:
+            transit, hit = None, False
+        if hit:
+            pbar.set_description("Loading transit (cached)")
+        else:
+            pbar.set_description("Downloading transit lines")
+            try:
+                transit = ox.features_from_point(
+                    point,
+                    tags={'railway': ['rail', 'subway', 'tram', 'light_rail', 'monorail']},
+                    dist=dist
+                )
+            except:
+                transit = None
+            if use_cache:
+                save_cache(transit, 'transit', point, dist)
+        pbar.update(1)
+
+    print("✓ All data loaded!")
     
     # 2. Setup Plot
     print("Rendering map...")
-    fig, ax = plt.subplots(figsize=(12, 16), facecolor=THEME['bg'])
+    fig, ax = plt.subplots(figsize=(16, 16), facecolor=THEME['bg'])
     ax.set_facecolor(THEME['bg'])
     ax.set_position([0, 0, 1, 1])
     
@@ -268,8 +391,13 @@ def create_poster(city, country, point, dist, output_file):
         edge_linewidth=edge_widths,
         show=False, close=False
     )
-    
-    # Layer 3: Gradients (Top and Bottom)
+
+    # Layer 3: Transit Lines
+    if transit is not None and not transit.empty:
+        print("Plotting transit lines...")
+        plot_transit_lines(ax, transit)
+
+    # Layer 4: Gradients (Top and Bottom)
     create_gradient_fade(ax, THEME['gradient_color'], location='bottom', zorder=10)
     create_gradient_fade(ax, THEME['gradient_color'], location='top', zorder=10)
     
@@ -305,16 +433,6 @@ def create_poster(city, country, point, dist, output_file):
     
     ax.plot([0.4, 0.6], [0.125, 0.125], transform=ax.transAxes, 
             color=THEME['text'], linewidth=1, zorder=11)
-
-    # --- ATTRIBUTION (bottom right) ---
-    if FONTS:
-        font_attr = FontProperties(fname=FONTS['light'], size=8)
-    else:
-        font_attr = FontProperties(family='monospace', size=8)
-    
-    ax.text(0.98, 0.02, "© OpenStreetMap contributors", transform=ax.transAxes,
-            color=THEME['text'], alpha=0.5, ha='right', va='bottom', 
-            fontproperties=font_attr, zorder=11)
 
     # 5. Save
     print(f"Saving to {output_file}...")
@@ -421,6 +539,8 @@ Examples:
     parser.add_argument('--theme', '-t', type=str, default='feature_based', help='Theme name (default: feature_based)')
     parser.add_argument('--distance', '-d', type=int, default=29000, help='Map radius in meters (default: 29000)')
     parser.add_argument('--list-themes', action='store_true', help='List all available themes')
+    parser.add_argument('--no-cache', action='store_true', help='Bypass OSM data cache')
+    parser.add_argument('--clear-cache', action='store_true', help='Clear cached OSM data and exit')
     
     args = parser.parse_args()
     
@@ -429,6 +549,11 @@ Examples:
         print_examples()
         os.sys.exit(0)
     
+    # Clear cache if requested
+    if args.clear_cache:
+        clear_cache()
+        os.sys.exit(0)
+
     # List themes if requested
     if args.list_themes:
         list_themes()
@@ -458,7 +583,8 @@ Examples:
     try:
         coords = get_coordinates(args.city, args.country)
         output_file = generate_output_filename(args.city, args.theme)
-        create_poster(args.city, args.country, coords, args.distance, output_file)
+        create_poster(args.city, args.country, coords, args.distance, output_file,
+                      use_cache=not args.no_cache)
         
         print("\n" + "=" * 50)
         print("✓ Poster generation complete!")
