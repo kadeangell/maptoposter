@@ -1,4 +1,3 @@
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import type { MapPosterTheme } from "@/lib/themes/types"
 import type { TextOptions } from "@/types"
@@ -55,7 +54,7 @@ export function Sidebar({
         <span>&#128506;</span>
         <span>Map Poster Generator</span>
       </div>
-      <ScrollArea className="flex-1 p-2 min-w-0">
+      <div className="flex-1 overflow-y-auto p-2 min-w-0">
         <div className="flex flex-col gap-2 min-w-0">
           <LocationInput
             city={city}
@@ -106,7 +105,7 @@ export function Sidebar({
             </p>
           </div>
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }
