@@ -123,10 +123,13 @@ def plot_transit_lines(ax, transit, theme):
         color = theme.get(color_key, default_color)
         lines.plot(ax=ax, color=color, linewidth=width, zorder=5, alpha=0.85)
 
-def render_poster(city, country, point, theme, fonts, map_data, output_file):
+def render_poster(city, country, point, theme, fonts, map_data, output_file,
+                  text_options=None, dpi=300):
     """
     Compose and save the final poster image.
     """
+    if text_options is None:
+        text_options = {}
     G = map_data['streets']
     water = map_data['water']
     parks = map_data['parks']
@@ -175,27 +178,29 @@ def render_poster(city, country, point, theme, fonts, map_data, output_file):
         font_sub = FontProperties(family='monospace', weight='normal', size=22)
         font_coords = FontProperties(family='monospace', size=14)
 
-    spaced_city = "  ".join(list(city.upper()))
+    if text_options.get("show_city", True):
+        spaced_city = "  ".join(list(city.upper()))
+        ax.text(0.5, 0.14, spaced_city, transform=ax.transAxes,
+                color=theme['text'], ha='center', fontproperties=font_main, zorder=11)
 
-    ax.text(0.5, 0.14, spaced_city, transform=ax.transAxes,
-            color=theme['text'], ha='center', fontproperties=font_main, zorder=11)
+    if text_options.get("show_country", True):
+        ax.text(0.5, 0.10, country.upper(), transform=ax.transAxes,
+                color=theme['text'], ha='center', fontproperties=font_sub, zorder=11)
 
-    ax.text(0.5, 0.10, country.upper(), transform=ax.transAxes,
-            color=theme['text'], ha='center', fontproperties=font_sub, zorder=11)
+    if text_options.get("show_coordinates", True):
+        lat, lon = point
+        coords = f"{lat:.4f}\u00b0 N / {lon:.4f}\u00b0 E" if lat >= 0 else f"{abs(lat):.4f}\u00b0 S / {lon:.4f}\u00b0 E"
+        if lon < 0:
+            coords = coords.replace("E", "W")
+        ax.text(0.5, 0.07, coords, transform=ax.transAxes,
+                color=theme['text'], alpha=0.7, ha='center', fontproperties=font_coords, zorder=11)
 
-    lat, lon = point
-    coords = f"{lat:.4f}\u00b0 N / {lon:.4f}\u00b0 E" if lat >= 0 else f"{abs(lat):.4f}\u00b0 S / {lon:.4f}\u00b0 E"
-    if lon < 0:
-        coords = coords.replace("E", "W")
-
-    ax.text(0.5, 0.07, coords, transform=ax.transAxes,
-            color=theme['text'], alpha=0.7, ha='center', fontproperties=font_coords, zorder=11)
-
-    ax.plot([0.4, 0.6], [0.125, 0.125], transform=ax.transAxes,
-            color=theme['text'], linewidth=1, zorder=11)
+    if text_options.get("show_divider", True):
+        ax.plot([0.4, 0.6], [0.125, 0.125], transform=ax.transAxes,
+                color=theme['text'], linewidth=1, zorder=11)
 
     # Save
     print(f"Saving to {output_file}...")
-    plt.savefig(output_file, dpi=300, facecolor=theme['bg'])
+    plt.savefig(output_file, dpi=dpi, facecolor=theme['bg'])
     plt.close()
     print(f"Done! Poster saved as {output_file}")
