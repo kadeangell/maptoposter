@@ -1,73 +1,68 @@
-# React + TypeScript + Vite
+# Map Poster Generator -- Web App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Static client-side web app for generating map posters. No backend, no API keys, runs entirely in the browser.
 
-Currently, two official plugins are available:
+Web rewrite of the [Python CLI](../README.md), itself based on [originalankur/maptoposter](https://github.com/originalankur/maptoposter).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Quick Start
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+pnpm install
+pnpm dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Stack
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- **React 19** + TypeScript + Vite
+- **MapLibre GL JS** with [OpenFreeMap](https://openfreemap.org/) vector tiles (OpenMapTiles schema)
+- **Tailwind CSS v4** with a Win95-inspired aesthetic
+- **TanStack Router** (file-based routing)
+- **Nominatim** for geocoding (client-side fetch, cached in localStorage)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Features
+
+- 17 built-in theme presets with instant map restyling
+- Per-color customization for background, water, parks, 6 road types, and 3 transit types
+- Bidirectional map interaction -- pan/zoom updates the sidebar, sidebar controls update the map
+- Live text overlay preview (city name, country, coordinates, divider line)
+- Canvas-based PNG export with gradient fades and text compositing
+- All settings persisted in localStorage across sessions
+
+## Architecture
+
+```
+src/
+├── routes/index.tsx            # Main page: sidebar + map + poster overlay
+├── components/
+│   ├── sidebar/                # Location, theme, distance, text controls
+│   ├── map/MapPreview.tsx      # MapLibre GL container
+│   ├── poster/PosterPreview.tsx # Live CSS text overlay
+│   └── loading/                # Stage-based loading animations
+├── hooks/                      # useTheme, useGeocode, usePosterExport, usePersistedState
+└── lib/
+    ├── themes/                 # Theme types, 17 presets, MapLibre style generator
+    ├── map/                    # Geocoding, zoom/distance conversion
+    └── poster/                 # Canvas export, text rendering, gradient fades
+```
+
+### Map Style Generation
+
+`lib/themes/style-generator.ts` builds a complete MapLibre `StyleSpecification` from a theme object. The style has 14 layers (background, water, waterway, park, landcover, 6 road types, 3 transit types) with no text/symbol layers for a clean poster aesthetic.
+
+Tile source: OpenFreeMap TileJSON at `https://tiles.openfreemap.org/planet`.
+
+### Canvas Export Pipeline
+
+1. Capture MapLibre canvas (`preserveDrawingBuffer: true`)
+2. Draw map onto OffscreenCanvas at target resolution
+3. Composite gradient fades (top/bottom, 25% extent)
+4. Render text overlays (city, divider, country, coordinates) using Roboto fonts
+5. Export as PNG blob and trigger download
+
+## Scripts
+
+```bash
+pnpm dev       # Development server
+pnpm build     # Production build
+pnpm preview   # Preview production build
 ```
