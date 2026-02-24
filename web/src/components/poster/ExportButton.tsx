@@ -15,9 +15,9 @@ interface Props {
 }
 
 const SIZES = [
+  { label: "Small (800px)", value: "800" },
   { label: "Preview (1600px)", value: "1600" },
   { label: "Print (4800px)", value: "4800" },
-  { label: "Small (800px)", value: "800" },
 ]
 
 export function ExportButton({ onExport, disabled, stage }: Props) {
@@ -35,7 +35,7 @@ export function ExportButton({ onExport, disabled, stage }: Props) {
   return (
     <div className="flex gap-1">
       <Select value={size} onValueChange={setSize}>
-        <SelectTrigger className="win-field h-7 text-xs w-28">
+        <SelectTrigger className="win-field h-7 text-xs w-32">
           <SelectValue />
         </SelectTrigger>
         <SelectContent className="win-panel">

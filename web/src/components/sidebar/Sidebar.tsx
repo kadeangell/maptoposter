@@ -1,11 +1,19 @@
-import { Button } from "@/components/ui/button"
 import type { MapPosterTheme } from "@/lib/themes/types"
 import type { TextOptions } from "@/types"
+import { ASPECT_RATIOS } from "@/types"
 import { LocationInput } from "./LocationInput"
 import { ThemeSelector } from "./ThemeSelector"
 import { ThemeColorEditor } from "./ThemeColorEditor"
 import { TextOverlayControls } from "./TextOverlayControls"
 import { DistanceSlider } from "./DistanceSlider"
+import { ExportButton } from "@/components/poster/ExportButton"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface Props {
   city: string
@@ -26,8 +34,12 @@ interface Props {
   textOptions: TextOptions
   onTextOptionsChange: (options: TextOptions) => void
 
-  onExport: () => void
+  aspectRatio: string
+  onAspectRatioChange: (v: string) => void
+
+  onExport: (size: number) => void
   exportDisabled: boolean
+  exportStage: string
 }
 
 export function Sidebar({
@@ -45,8 +57,11 @@ export function Sidebar({
   onDistanceChange,
   textOptions,
   onTextOptionsChange,
+  aspectRatio,
+  onAspectRatioChange,
   onExport,
   exportDisabled,
+  exportStage,
 }: Props) {
   return (
     <div className="flex flex-col h-full win-panel min-w-0 overflow-hidden">
@@ -76,15 +91,27 @@ export function Sidebar({
             onChange={onTextOptionsChange}
           />
 
-          <div className="flex gap-2">
-            <Button
-              className="flex-1 win-raised h-8 text-xs bg-secondary text-secondary-foreground active:win-sunken font-bold"
-              onClick={onExport}
-              disabled={exportDisabled}
-            >
-              Export PNG
-            </Button>
-          </div>
+          <fieldset className="win-sunken p-2">
+            <legend className="text-xs px-1">Aspect Ratio</legend>
+            <Select value={aspectRatio} onValueChange={onAspectRatioChange}>
+              <SelectTrigger className="win-field h-7 text-xs w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="win-panel">
+                {ASPECT_RATIOS.map((r) => (
+                  <SelectItem key={r.value} value={r.value} className="text-xs">
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </fieldset>
+
+          <ExportButton
+            onExport={onExport}
+            disabled={exportDisabled}
+            stage={exportStage}
+          />
 
           {/* 90s web footer flair */}
           <div className="mt-2 py-2 border-t border-gray-500 text-center min-w-0">

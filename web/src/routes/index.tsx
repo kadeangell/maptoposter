@@ -12,6 +12,7 @@ import { useTheme } from "@/hooks/useTheme"
 import { usePosterExport } from "@/hooks/usePosterExport"
 import { usePersistedState } from "@/hooks/usePersistedState"
 import type { TextOptions } from "@/types"
+import { getAspectRatio, detectAspectRatio } from "@/types"
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -27,6 +28,7 @@ function HomePage() {
     showCoordinates: true,
     showDivider: true,
   })
+  const [aspectRatio, setAspectRatio] = usePersistedState("aspect-ratio", detectAspectRatio())
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   const { themeName, theme, selectPreset, updateColor } = useTheme()
@@ -54,10 +56,11 @@ function HomePage() {
         toast.error("Search for a city first")
         return
       }
+      const ar = getAspectRatio(aspectRatio)
       const canvas = map.getCanvas()
-      await doExport(canvas, theme, city, country, geoResult.lat, geoResult.lon, textOptions, size)
+      await doExport(canvas, theme, city, country, geoResult.lat, geoResult.lon, textOptions, size, ar.w, ar.h)
     },
-    [theme, city, country, geoResult, textOptions, doExport],
+    [theme, city, country, geoResult, textOptions, doExport, aspectRatio],
   )
 
   const handleViewChange = useCallback(
@@ -70,6 +73,7 @@ function HomePage() {
   )
 
   const center: [number, number] | null = geoResult ? [geoResult.lon, geoResult.lat] : null
+  const ar = getAspectRatio(aspectRatio)
 
   return (
     <div className="flex flex-col md:flex-row h-screen overflow-hidden">
@@ -102,47 +106,55 @@ function HomePage() {
           onDistanceChange={setDistance}
           textOptions={textOptions}
           onTextOptionsChange={setTextOptions}
-          onExport={() => handleExport(1600)}
+          aspectRatio={aspectRatio}
+          onAspectRatioChange={setAspectRatio}
+          onExport={handleExport}
           exportDisabled={exportStage !== "idle" && exportStage !== "done" && exportStage !== "error"}
+          exportStage={exportStage}
         />
       </div>
 
       {/* Map + poster preview */}
-      <div className="flex-1 relative min-h-0">
-        <MapPreview
-          theme={theme}
-          center={center}
-          distance={distance}
-          onMapReady={(map) => {
-            mapRef.current = map
-          }}
-          onTilesLoaded={() => {
-            if (loadingStage === "tiles") setLoadingStage(null)
-          }}
-          onViewChange={handleViewChange}
-        />
+      <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden" style={{ backgroundColor: theme.bg }}>
+        <div
+          className="relative h-full max-w-full"
+          style={{ aspectRatio: `${ar.w} / ${ar.h}` }}
+        >
+          <MapPreview
+            theme={theme}
+            center={center}
+            distance={distance}
+            onMapReady={(map) => {
+              mapRef.current = map
+            }}
+            onTilesLoaded={() => {
+              if (loadingStage === "tiles") setLoadingStage(null)
+            }}
+            onViewChange={handleViewChange}
+          />
 
-        <PosterPreview
-          city={city}
-          country={country}
-          lat={geoResult?.lat ?? null}
-          lon={geoResult?.lon ?? null}
-          textColor={theme.text}
-          gradientColor={theme.gradient_color}
-          options={textOptions}
-        />
+          <PosterPreview
+            city={city}
+            country={country}
+            lat={geoResult?.lat ?? null}
+            lon={geoResult?.lon ?? null}
+            textColor={theme.text}
+            gradientColor={theme.gradient_color}
+            options={textOptions}
+          />
 
-        {loadingStage && <LoadingOverlay stage={loadingStage} />}
+          {loadingStage && <LoadingOverlay stage={loadingStage} />}
 
-        {geoError && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 win-panel px-3 py-1 text-xs text-red-800 bg-yellow-100 border border-red-400">
-            {geoError}
+          {geoError && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 win-panel px-3 py-1 text-xs text-red-800 bg-yellow-100 border border-red-400">
+              {geoError}
+            </div>
+          )}
+
+          {/* 90s visitor counter badge */}
+          <div className="absolute bottom-1 right-1 z-10 text-[9px] text-muted-foreground bg-background/70 px-1">
+            OpenFreeMap | OpenMapTiles | OSM contributors
           </div>
-        )}
-
-        {/* 90s visitor counter badge */}
-        <div className="absolute bottom-1 right-1 z-10 text-[9px] text-muted-foreground bg-background/70 px-1">
-          OpenFreeMap | OpenMapTiles | OSM contributors
         </div>
       </div>
     </div>

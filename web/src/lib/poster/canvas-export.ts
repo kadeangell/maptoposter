@@ -7,7 +7,7 @@ import { drawTextOverlays } from "@/lib/poster/text-renderer";
  *
  * Pipeline:
  * 1. Fill with background colour
- * 2. Draw the map canvas (stretched to fill)
+ * 2. Draw the map canvas (center-cropped to fill)
  * 3. Apply gradient fades (top & bottom)
  * 4. Render text overlays
  */
@@ -32,8 +32,28 @@ export async function exportPoster(
   ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, width, height);
 
-  // 2. Map image (stretch to fill)
-  ctx.drawImage(mapCanvas, 0, 0, width, height);
+  // 2. Map image (center-crop to fill, no distortion)
+  const sw = mapCanvas.width;
+  const sh = mapCanvas.height;
+  const targetRatio = width / height;
+  const sourceRatio = sw / sh;
+
+  let sx: number, sy: number, cropW: number, cropH: number;
+  if (sourceRatio > targetRatio) {
+    // Source is wider than target — crop sides
+    cropH = sh;
+    cropW = sh * targetRatio;
+    sx = (sw - cropW) / 2;
+    sy = 0;
+  } else {
+    // Source is taller than target — crop top/bottom
+    cropW = sw;
+    cropH = sw / targetRatio;
+    sx = 0;
+    sy = (sh - cropH) / 2;
+  }
+
+  ctx.drawImage(mapCanvas, sx, sy, cropW, cropH, 0, 0, width, height);
 
   // 3. Gradient fades
   drawGradientFade(ctx, theme.gradient_color, "top", width, height);

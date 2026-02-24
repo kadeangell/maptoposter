@@ -19,6 +19,8 @@ export function usePosterExport() {
       lon: number,
       textOptions: TextOptions,
       size: number,
+      aspectW: number,
+      aspectH: number,
     ) => {
       setStage("loading-fonts")
       setError(null)
@@ -26,7 +28,9 @@ export function usePosterExport() {
         await loadPosterFonts()
 
         setStage("compositing")
-        const blob = await exportPoster(mapCanvas, theme, city, country, lat, lon, textOptions, size, size)
+        const width = size
+        const height = Math.round(size * (aspectH / aspectW))
+        const blob = await exportPoster(mapCanvas, theme, city, country, lat, lon, textOptions, width, height)
 
         const filename = `${city.toLowerCase().replace(/\s+/g, "_")}_poster.png`
         downloadBlob(blob, filename)
