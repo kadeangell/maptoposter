@@ -1,10 +1,10 @@
 import { useState, useCallback, useMemo } from "react"
+import { useQueryState, parseAsString } from "nuqs"
 import type { MapPosterTheme } from "@/lib/themes/types"
 import { THEMES, DEFAULT_THEME_KEY } from "@/lib/themes/theme-data"
-import { usePersistedState } from "./usePersistedState"
 
 export function useTheme() {
-  const [themeName, setThemeName] = usePersistedState("theme-name", DEFAULT_THEME_KEY)
+  const [themeName, setThemeName] = useQueryState("theme", parseAsString.withDefault(DEFAULT_THEME_KEY))
   const [customColors, setCustomColors] = useState<Partial<MapPosterTheme>>({})
 
   const baseTheme = THEMES[themeName] ?? THEMES[DEFAULT_THEME_KEY]

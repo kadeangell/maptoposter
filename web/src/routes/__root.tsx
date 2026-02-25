@@ -1,4 +1,5 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router"
+import { NuqsAdapter } from "nuqs/adapters/tanstack-router"
 import { Toaster } from "@/components/ui/sonner"
 
 export const Route = createRootRoute({
@@ -7,9 +8,9 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   return (
-    <>
+    <NuqsAdapter>
       <Outlet />
       <Toaster position="bottom-right" />
-    </>
+    </NuqsAdapter>
   )
 }

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { useState, useCallback, useRef } from "react"
+import { useQueryState, useQueryStates, parseAsString, parseAsInteger, parseAsFloat, parseAsBoolean } from "nuqs"
 import maplibregl from "maplibre-gl"
 import { toast } from "sonner"
 import { Sidebar } from "@/components/sidebar/Sidebar"
@@ -10,29 +11,35 @@ import type { LoadingStage } from "@/components/loading/LoadingOverlay"
 import { useGeocode } from "@/hooks/useGeocode"
 import { useTheme } from "@/hooks/useTheme"
 import { usePosterExport } from "@/hooks/usePosterExport"
-import { usePersistedState } from "@/hooks/usePersistedState"
-import type { TextOptions } from "@/types"
 import { getAspectRatio, detectAspectRatio } from "@/types"
 
 export const Route = createFileRoute("/")({
   component: HomePage,
 })
 
+const defaultAspectRatio = detectAspectRatio()
+
 function HomePage() {
-  const [city, setCity] = usePersistedState("city", "")
-  const [country, setCountry] = usePersistedState("country", "")
-  const [distance, setDistance] = usePersistedState("distance", 10000)
-  const [textOptions, setTextOptions] = usePersistedState<TextOptions>("text-options", {
-    showCity: true,
-    showCountry: true,
-    showCoordinates: true,
-    showDivider: true,
+  // URL-synced state
+  const [city, setCity] = useQueryState("city", parseAsString.withDefault(""))
+  const [country, setCountry] = useQueryState("country", parseAsString.withDefault(""))
+  const [distance, setDistance] = useQueryState("d", parseAsInteger.withDefault(10000))
+  const [aspectRatio, setAspectRatio] = useQueryState("ratio", parseAsString.withDefault(defaultAspectRatio))
+  const [lat, setLat] = useQueryState("lat", parseAsFloat)
+  const [lon, setLon] = useQueryState("lon", parseAsFloat)
+
+  const [textOptions, setTextOptions] = useQueryStates({
+    showCity: parseAsBoolean.withDefault(true),
+    showCountry: parseAsBoolean.withDefault(true),
+    showCoordinates: parseAsBoolean.withDefault(true),
+    showDivider: parseAsBoolean.withDefault(true),
   })
-  const [aspectRatio, setAspectRatio] = usePersistedState("aspect-ratio", detectAspectRatio())
+
+  // Local-only state
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   const { themeName, theme, selectPreset, updateColor } = useTheme()
-  const { result: geoResult, setResult: setGeoResult, loading: geoLoading, error: geoError, geocode } = useGeocode()
+  const { loading: geoLoading, error: geoError, geocode } = useGeocode()
   const { stage: exportStage, doExport } = usePosterExport()
 
   const mapRef = useRef<maplibregl.Map | null>(null)
@@ -42,37 +49,39 @@ function HomePage() {
     setLoadingStage("geocoding")
     const result = await geocode(city, country)
     if (result) {
+      setLat(result.lat)
+      setLon(result.lon)
       setLoadingStage("tiles")
-      // Tiles loading overlay will be dismissed by onTilesLoaded
     } else {
       setLoadingStage(null)
     }
-  }, [city, country, geocode])
+  }, [city, country, geocode, setLat, setLon])
 
   const handleExport = useCallback(
     async (size: number) => {
       const map = mapRef.current
-      if (!map || !geoResult) {
+      if (!map || lat === null || lon === null) {
         toast.error("Search for a city first")
         return
       }
       const ar = getAspectRatio(aspectRatio)
       const canvas = map.getCanvas()
-      await doExport(canvas, theme, city, country, geoResult.lat, geoResult.lon, textOptions, size, ar.w, ar.h)
+      await doExport(canvas, theme, city, country, lat, lon, textOptions, size, ar.w, ar.h)
     },
-    [theme, city, country, geoResult, textOptions, doExport, aspectRatio],
+    [theme, city, country, lat, lon, textOptions, doExport, aspectRatio],
   )
 
   const handleViewChange = useCallback(
     (newCenter: [number, number], newDistance: number) => {
-      const [lon, lat] = newCenter
-      setGeoResult({ lat, lon, displayName: geoResult?.displayName ?? "" })
+      const [newLon, newLat] = newCenter
+      setLat(newLat)
+      setLon(newLon)
       setDistance(newDistance)
     },
-    [geoResult?.displayName, setGeoResult, setDistance],
+    [setLat, setLon, setDistance],
   )
 
-  const center: [number, number] | null = geoResult ? [geoResult.lon, geoResult.lat] : null
+  const center: [number, number] | null = lat !== null && lon !== null ? [lon, lat] : null
   const ar = getAspectRatio(aspectRatio)
 
   return (
@@ -136,8 +145,8 @@ function HomePage() {
           <PosterPreview
             city={city}
             country={country}
-            lat={geoResult?.lat ?? null}
-            lon={geoResult?.lon ?? null}
+            lat={lat}
+            lon={lon}
             textColor={theme.text}
             gradientColor={theme.gradient_color}
             options={textOptions}
