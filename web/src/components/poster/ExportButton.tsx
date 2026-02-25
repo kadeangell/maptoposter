@@ -35,7 +35,7 @@ export function ExportButton({ onExport, disabled, stage }: Props) {
   return (
     <div className="flex gap-1">
       <Select value={size} onValueChange={setSize}>
-        <SelectTrigger className="win-field h-7 text-xs w-32">
+        <SelectTrigger className="win-field h-9 text-xs w-32">
           <SelectValue />
         </SelectTrigger>
         <SelectContent className="win-panel">
@@ -47,7 +47,7 @@ export function ExportButton({ onExport, disabled, stage }: Props) {
         </SelectContent>
       </Select>
       <Button
-        className="flex-1 win-raised h-7 text-xs bg-secondary text-secondary-foreground active:win-sunken font-bold"
+        className="flex-1 win-raised text-xs bg-secondary text-secondary-foreground active:win-sunken font-bold"
         onClick={() => onExport(parseInt(size))}
         disabled={disabled}
       >
